@@ -4,6 +4,14 @@ A minimal, local-network remote for Samsung Tizen TVs. Open it in a browser on y
 
 The main screen is just the remote. Connection settings, apps, the number pad, and the alphabet keyboard appear when you need them.
 
+## Screenshots
+
+| Remote | YouTube keyboard | Apps |
+| --- | --- | --- |
+| <img src="docs/screenshots/remote.png" width="240" alt="Minimal Samsung remote with navigation, playback and expandable controls"> | <img src="docs/screenshots/keyboard.png" width="240" alt="Expanded YouTube keyboard with red focus-sync state"> | <img src="docs/screenshots/apps.png" width="240" alt="App launcher popover with twelve TV apps"> |
+
+Captured from the running app at a phone-sized viewport. The TV is offline in these screenshots; the red keyboard tint means its selection needs syncing.
+
 ## Features
 
 - **Everyday controls:** navigation, OK, Back, Home, Menu, Source, Guide, volume, channels, playback, and power.
