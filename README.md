@@ -1,35 +1,141 @@
-# Nearby — Samsung local remote
+# Nearby · Samsung TV Remote
 
-A local web remote for the Samsung UA32N4300 at 192.168.0.108. Includes navigation, volume, channels, source, guide, playback, a number pad and a one-tap YouTube launcher. The app never displays invented TV playback or volume state.
+A minimal, local-network remote for Samsung Tizen TVs. Open it in a browser on your laptop or phone to control your TV, launch apps, and type in YouTube using navigation-based keyboard input.
 
-## Run
+The main screen is just the remote. Connection settings, apps, the number pad, and the alphabet keyboard appear when you need them.
 
-Requires Node.js 22 or later.
+## Features
+
+- **Everyday controls:** navigation, OK, Back, Home, Menu, Source, Guide, volume, channels, playback, and power.
+- **App shortcuts:** a YouTube button and an app popover with launch commands for the configured apps.
+- **YouTube keyboard:** converts characters into directional presses and OK, instead of relying on text injection that YouTube may ignore.
+- **Physical keyboard input:** queued typing with a full-text progress preview and a colored active character.
+- **Minimal focus syncing:** identify the currently highlighted TV key with one tap; a red tint indicates an unknown selection.
+- **Local pairing:** the TV approves the connection, and the server stores the pairing token locally.
+- **Home-server deployment:** run independently of your laptop, with an optional Git push deployment hook.
+
+## Requirements and compatibility
+
+- Node.js **22 or later** and npm.
+- A Samsung TV with the local Tizen remote WebSocket interface enabled.
+- A computer or home server that can reach the TV on the local network.
+- A modern browser with support for native HTML popovers.
+
+Developed and tested with a **Samsung UA32N4300**. Other models may behave differently. App IDs, remote keys, and YouTube keyboard layouts are not universal.
+
+The app currently includes a sample TV address (`192.168.0.108`), a model label, and a saved list of apps from the development TV. Set your own TV address in **Samsung → Connection settings**. The app catalog in [`apps.js`](apps.js) is a static list, not live discovery.
+
+## Quick start
 
 ```sh
-npm install
+git clone https://github.com/sakiatu/SamsungTV.git
+cd SamsungTV
+npm ci
 npm start
 ```
 
-Open http://localhost:7000 on this computer. Turn the TV on, use the same local network, click **Connect to TV**, and select **Allow** on the television. Pairing tokens are stored locally in `.data/config.json` (excluded from git). Settings let you change the IP and try port 8001 if secure port 8002 is unavailable.
+Open **[http://127.0.0.1:7000](http://127.0.0.1:7000)**.
 
-The server intentionally listens on this computer only. It bridges browser requests to the TV's Samsung WebSocket interface; the TV's self-signed TLS certificate is accepted only for that connection. API requests require same-origin JSON and a private IPv4 destination. No account or cloud service is involved.
+1. Turn on the TV and connect it to the same local network as the server.
+2. Open the connection settings from the Samsung label and enter the TV's IP address.
+3. Choose **Save & connect**. Secure port **8002** is the default; port **8001** is available for compatible models.
+4. Select **Allow** on the television when prompted.
 
-The power button sends a power key over an active connection. Waking a fully powered-off TV is not implemented. Some keys depend on the TV model and active application. A successful send means the command was transmitted, not that the TV confirmed its action.
+Pairing configuration is stored in `.data/config.json`, which is excluded from Git. A server restart preserves the token, but you must click **Connect** again to establish the TV connection.
 
-Run `npm test` for protocol, destination validation and disconnected-command checks.
+## Using the remote
 
-Protocol reference: https://github.com/xchwarze/samsung-tv-ws-api
+| Control | What it opens or does |
+| --- | --- |
+| Samsung label | Connection status and settings |
+| Connect beside Offline | Connect using the saved settings |
+| YouTube | Launch YouTube |
+| Apps grid | Show the configured app shortcuts |
+| Number-pad icon | Expand numeric keys |
+| ABC icon | Expand the YouTube keyboard |
+| ? | Help and keyboard shortcuts |
 
-For YouTube text entry, use the directional pad and OK to select letters on the television's on-screen keyboard. Direct text entry is not supported by this remote.
+### YouTube typing
 
-## Home server
+YouTube on the development TV did not accept Samsung's direct text-input commands. This remote instead navigates the TV's on-screen keyboard and presses OK for each character.
 
-The home server deployment uses `~/samsung-tv-remote` on `ssh cloud` (192.168.0.103). Open http://192.168.0.103:7000 from a phone on the home network. No laptop is required.
+1. Open YouTube Search on the TV, with its alphabet keyboard visible.
+2. Expand **ABC** in the remote.
+3. Tap or type the key currently highlighted on the TV. **This first input only syncs the position; it does not type.**
+4. Tap letters or type on your computer keyboard. Commands are queued and sent sequentially.
+5. Use **↻** to sync again if another remote moves the TV selection.
 
-The user systemd unit is in `deploy/samsung-tv-remote.service`. It binds to the LAN address explicitly and allows that Host header while preserving same-origin request checks. Default local runs still bind to 127.0.0.1. Devices able to reach the LAN port can control the TV; this is intended for the trusted home network.
+The status shows the queued text with the active character colored blue. The preview disappears when the queue completes. It represents commands entered through this remote, not a readback of the TV's search field.
 
-Service commands on the server:
+The navigation algorithm targets this layout:
+
+```text
+A B C D E F G   Delete
+H I J K L M N   &123
+O P Q R S T U   Globe
+V W X Y Z - '
+Space   Clear   Search
+```
+
+Down from any key in the last alphabet row reaches Space. Space, Clear, and Search preserve the originating column when moving back Up. If that column is unknown, the remote sends Up without OK and asks you to identify the highlighted letter.
+
+Delete, Space, and Clear can be repeated. Search and layout-switch commands require syncing again before further typing. The numeric/symbol and alternative-language layouts are **not mapped**; return to the alphabet layout before continuing. Adjust [`keyboard.js`](keyboard.js) if your TV uses different navigation behavior.
+
+### Computer keyboard shortcuts
+
+Keep the remote page focused.
+
+| Key | ABC panel open | ABC panel closed |
+| --- | --- | --- |
+| A–Z, `-`, `'` | Type through TV keyboard navigation | M toggles mute; other letters have no shortcut |
+| Space | Select Space | Play |
+| Backspace / Delete | Select Delete | Backspace goes back |
+| Enter | Select Search | OK |
+| Arrow keys | No direct arrow shortcut | Navigate |
+| 0–9 | Not mapped to the alphabet layout | Send number keys |
+| + / − | Not mapped to the alphabet layout | Volume up / down |
+
+Browser shortcuts using Ctrl, Command, or Alt are left alone. Physical keyboard input is suspended while settings, help, or the app popover is open.
+
+## Run on a home server
+
+A phone can use this remote without the laptop if the Node server runs on an always-on device on the home network.
+
+For example, if that device has LAN address `192.168.0.103`:
+
+```sh
+BIND_HOST=192.168.0.103 ALLOWED_HOSTS=192.168.0.103 PORT=7000 npm start
+```
+
+Open **http://192.168.0.103:7000** from a phone on the same network. Replace that address with your server's actual LAN IP. The server bridges the phone's browser requests to the TV; hosting the static page alone is insufficient.
+
+| Environment variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `7000` | HTTP listening port |
+| `BIND_HOST` | `127.0.0.1` | Interface/address to listen on |
+| `ALLOWED_HOSTS` | Empty | Comma-separated additional hostnames/IPs, without ports |
+
+`localhost` and `127.0.0.1` are always allowed Host names. Additional names must match how clients access the server.
+
+### Keep it running with systemd
+
+The example unit in [`deploy/samsung-tv-remote.service`](deploy/samsung-tv-remote.service) assumes:
+
+- App files at `~/samsung-tv-remote`.
+- Node at `/usr/bin/node`.
+- Server LAN address `192.168.0.103`, port `7000`.
+
+Edit those values for your machine before installing:
+
+```sh
+mkdir -p ~/.config/systemd/user
+cp deploy/samsung-tv-remote.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now samsung-tv-remote
+loginctl enable-linger "$USER"
+```
+
+Lingering lets the user service run after logout and start at boot; enabling it may require administrator assistance.
 
 ```sh
 systemctl --user status samsung-tv-remote
@@ -37,34 +143,91 @@ systemctl --user restart samsung-tv-remote
 journalctl --user -u samsung-tv-remote -n 50
 ```
 
-User lingering must be enabled for startup at boot and operation after SSH logout. Pairing tokens remain in the server's private `.data` directory.
+## Optional push-to-deploy
 
-## Push to deploy
+[`deploy/post-receive`](deploy/post-receive) is a Bash hook for a bare Git repository on a Linux home server. It requires Node, npm, Git, rsync, flock, curl, and the configured user service.
 
-The `home` Git remote points to the bare repository at `cloud:repos/samsung-tv-remote.git`. From this project:
+The example assumes a bare repository at `~/repos/samsung-tv-remote.git`, an existing live app at `~/samsung-tv-remote`, and a health endpoint at `http://192.168.0.103:7000/api/status`. Change these paths and the URL if needed.
+
+On the server:
 
 ```sh
-git add <changed-files>
-git commit -m "Describe the change"
+mkdir -p ~/repos
+git init --bare --initial-branch=main ~/repos/samsung-tv-remote.git
+cp deploy/post-receive ~/repos/samsung-tv-remote.git/hooks/post-receive
+chmod 700 ~/repos/samsung-tv-remote.git/hooks/post-receive
+git --git-dir="$HOME/repos/samsung-tv-remote.git" config receive.denyNonFastForwards true
+git --git-dir="$HOME/repos/samsung-tv-remote.git" config receive.denyDeletes true
+```
+
+On your development computer, replace `YOUR_SSH_HOST` with your server's SSH alias or `user@address`:
+
+```sh
+git remote add home YOUR_SSH_HOST:repos/samsung-tv-remote.git
 git push home main
 ```
 
-Pushing `main` runs the server's post-receive hook: it installs dependencies and runs tests in a staging directory, then updates the live app and restarts the service. `.data` stays on the server and is never replaced. A restart or health-check failure restores the previous app. Other branches do not deploy. No GitHub account or external CI is needed.
+For pushes to `main`, the hook:
 
-Read the push output for `Deployed ...`: Git can accept a push even when its post-receive deployment fails. The last successfully deployed commit is recorded in `~/.local/share/samsung-tv-remote/releases/deployed-revision`. Build and rollback directories remain there for troubleshooting.
+1. Installs dependencies and runs tests in a staging directory.
+2. Saves a rollback copy of the current app.
+3. Updates the app while preserving `.data` and restarts the service.
+4. Checks HTTP health and service state; restores the previous app on failure.
 
-The installed hook is `~/repos/samsung-tv-remote.git/hooks/post-receive`; its source is `deploy/post-receive`. Changes to that hook or the systemd unit must be installed separately; ordinary app pushes do not alter deployment infrastructure.
+Other branches do not deploy. Git can accept a push even if a post-receive hook fails, so check for the **Deployed** message. The deployed revision and retained build/rollback directories are under `~/.local/share/samsung-tv-remote/releases`. Those directories require occasional manual cleanup.
 
-## GitHub and home-server pushes
+Changes to the hook or service unit must be installed separately; an ordinary app deployment does not replace the installed infrastructure files.
 
-The private GitHub repository is `https://github.com/sakiatu/SamsungTV` (`origin`). On this laptop, `origin` has two push URLs: GitHub first, then `cloud:repos/samsung-tv-remote.git`. Plain `git push` on `main` sends the commit to both; the home-server push triggers deployment. `home` remains available for server-only pushes. Fetches from `origin` read GitHub.
+### Push to GitHub and your home server together
 
-This multi-destination push configuration is local Git configuration, not part of a clone. To set it up on another trusted computer with the `cloud` SSH alias:
+After configuring `origin` for your own GitHub repository, add two push destinations:
 
 ```sh
-git remote set-url --add --push origin https://github.com/sakiatu/SamsungTV.git
-git remote set-url --add --push origin cloud:repos/samsung-tv-remote.git
+git remote set-url --add --push origin https://github.com/YOUR_ACCOUNT/YOUR_REPO.git
+git remote set-url --add --push origin YOUR_SSH_HOST:repos/samsung-tv-remote.git
 git config branch.main.pushRemote origin
+git push origin main
 ```
 
-Pushes to two servers are not atomic. Inspect both results; if one fails, rerun `git push` after restoring access. GitHub-only edits do not automatically deploy to the LAN server; pull them locally and push both destinations.
+This is local Git configuration and is not inherited by other clones. Fetches still read the normal `origin` URL. The two pushes are not atomic; inspect both results and retry if one fails. Edits made directly on GitHub do not deploy automatically—pull them locally, then push to the home server.
+
+## Security and limitations
+
+- Intended for a **trusted local network**. There is no application login: devices that can reach an allowed LAN address can control the TV.
+- Do not forward the HTTP port or TV control ports to the public internet. A cloud host cannot directly reach a private TV address without a network bridge or VPN.
+- Requests enforce allowed Host values and matching browser origins; state-changing API requests require JSON. These checks are not user authentication.
+- TV destinations must be private IPv4 addresses. IPv6 and hostname-based TV addresses are not supported.
+- The TV's self-signed certificate is accepted on its secure WebSocket connection; this does not authenticate the TV certificate.
+- Keep `.data/config.json` private. Do not commit pairing tokens or share that directory.
+- Power requires an active connection. Wake-on-LAN is not implemented.
+- A successful send means a command was transmitted, not that the TV confirmed the action.
+- Keyboard focus is estimated, not read from the TV. Missed commands or use of another remote require syncing again. Use one controller at a time while typing.
+- App presence, service availability, and launch behavior vary by TV. YouTube launch was verified on the development TV; not every catalog entry has been individually tested.
+
+## Development
+
+```sh
+npm ci
+npm test
+npm start
+```
+
+The tests cover private-address validation, remote message serialization, WebSocket pairing and key delivery, app launch routing, YouTube keyboard paths, focus recovery, and physical-key mapping. They use a local WebSocket test listener on port 8001; they do not require a real TV or prove behavior on every model.
+
+| File | Responsibility |
+| --- | --- |
+| `server.js` | HTTP server, local configuration, API routes |
+| `remote.js` | Samsung WebSocket pairing and commands |
+| `keyboard.js` | YouTube keyboard navigation and recovery |
+| `apps.js` | Configured app IDs and launch types |
+| `public/` | Remote interface, input queue, styling |
+| `test/` | Node test suite |
+| `deploy/` | Optional Linux service and Git deployment hook |
+
+For compatibility reports, include the TV model, app keyboard layout, and reproduction steps. Omit pairing tokens, serial numbers, and other private identifiers.
+
+## Acknowledgments
+
+Samsung protocol implementation references: [samsung-tv-ws-api](https://github.com/xchwarze/samsung-tv-ws-api), including its [commands](https://github.com/xchwarze/samsung-tv-ws-api/blob/master/COMMANDS.md) and [application IDs](https://github.com/xchwarze/samsung-tv-ws-api/blob/master/APPLICATIONS.md).
+
+This is an independent project, not affiliated with Samsung or YouTube. No license has been added yet; making a repository public does not itself grant an open-source license.
