@@ -3,7 +3,9 @@ import {keyboardAction} from './keyboard.js';
 import {apps} from './apps.js';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {Remote,validHost} from './remote.js';
-const port=Number(process.env.PORT||3000);
+const port=Number(process.env.PORT||7000);
+const bindHost=process.env.BIND_HOST||'127.0.0.1';
+const allowedHosts=new Set(['localhost','127.0.0.1',...(process.env.ALLOWED_HOSTS||'').split(',').map(h=>h.trim()).filter(Boolean)].map(h=>`${h}:${port}`));
 let config={host:'192.168.0.108',port:8002,tokens:{}};
 try{config={...config,...JSON.parse(await readFile(new URL('./.data/config.json',import.meta.url),'utf8'))};}catch{}
 const remote=new Remote((host,port,token)=>{config.tokens[`${host}:${port}`]=token;persist().catch(console.error);});remote.host=config.host;
@@ -11,7 +13,7 @@ async function persist(){await mkdir(new URL('./.data/',import.meta.url),{recurs
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
 const server=http.createServer(async(req,res)=>{
  const origin=req.headers.origin;
- if(!['localhost','127.0.0.1'].some(h=>req.headers.host===`${h}:${port}`)){return json(res,403,{error:'Use localhost to access this remote.'});}
+ if(!allowedHosts.has(req.headers.host)){return json(res,403,{error:'Use a configured address to access this remote.'});}
  if(origin&&origin!==`http://${req.headers.host}`)return json(res,403,{error:'Origin rejected'});
  try{
  if(req.url==='/api/apps'&&req.method==='GET')return json(res,200,{apps});
@@ -31,4 +33,4 @@ const server=http.createServer(async(req,res)=>{
  if(!file||req.method!=='GET')return json(res,404,{error:'Not found'});
  res.writeHead(200,{'Content-Type':file[1],'Content-Security-Policy':"default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'"});res.end(await readFile(new URL(`./public/${file[0]}`,import.meta.url)));
  }catch(error){json(res,400,{error:error.message});}
-});server.listen(port,'127.0.0.1',()=>console.log(`Samsung remote: http://localhost:${port}`));
+});server.listen(port,bindHost,()=>console.log(`Samsung remote listening on ${bindHost}:${port}`));

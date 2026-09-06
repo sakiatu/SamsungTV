@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo="$HOME/repos/samsung-tv-remote.git"
+app="$HOME/samsung-tv-remote"
+releases="$HOME/.local/share/samsung-tv-remote/releases"
+changed=false
+while read -r old new ref; do
+  if [[ "$ref" == refs/heads/main && "$new" != 0000000000000000000000000000000000000000 ]]; then changed=true; fi
+done
+$changed || exit 0
+mkdir -p "$releases"
+exec 9>"$releases/deploy.lock"
+flock 9
+revision=$(git --git-dir="$repo" rev-parse refs/heads/main)
+stage=$(mktemp -d "$releases/build.XXXXXX")
+git --git-dir="$repo" archive "$revision" | tar -x -C "$stage"
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+cd "$stage"
+echo "Validating $revision"
+npm ci --omit=dev
+npm test
+backup=$(mktemp -d "$releases/previous.XXXXXX")
+rsync -a --exclude=.data --exclude=.git "$app/" "$backup/"
+restore() {
+  echo 'Deployment failed; restoring the previous app.' >&2
+  rsync -a --delete --exclude=.data --exclude=.git "$backup/" "$app/"
+  systemctl --user restart samsung-tv-remote
+}
+trap restore ERR
+rsync -a --delete --exclude=.data --exclude=.git "$stage/" "$app/"
+systemctl --user restart samsung-tv-remote
+healthy=false
+for attempt in {1..15}; do
+  if curl --fail --silent --max-time 2 http://192.168.0.103:7000/api/status >/dev/null; then healthy=true; break; fi
+  sleep 1
+done
+$healthy
+systemctl --user is-active --quiet samsung-tv-remote
+trap - ERR
+printf '%s\n' "$revision" > "$releases/deployed-revision"
+echo "Deployed $revision to http://192.168.0.103:7000"

@@ -1,0 +1,18 @@
+[Unit]
+Description=Samsung TV local remote
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/samsung-tv-remote
+ExecStart=/usr/bin/node server.js
+Environment=PORT=7000
+Environment=BIND_HOST=192.168.0.103
+Environment=ALLOWED_HOSTS=192.168.0.103
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target
