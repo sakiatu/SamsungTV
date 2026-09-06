@@ -54,3 +54,17 @@ Pushing `main` runs the server's post-receive hook: it installs dependencies and
 Read the push output for `Deployed ...`: Git can accept a push even when its post-receive deployment fails. The last successfully deployed commit is recorded in `~/.local/share/samsung-tv-remote/releases/deployed-revision`. Build and rollback directories remain there for troubleshooting.
 
 The installed hook is `~/repos/samsung-tv-remote.git/hooks/post-receive`; its source is `deploy/post-receive`. Changes to that hook or the systemd unit must be installed separately; ordinary app pushes do not alter deployment infrastructure.
+
+## GitHub and home-server pushes
+
+The private GitHub repository is `https://github.com/sakiatu/SamsungTV` (`origin`). On this laptop, `origin` has two push URLs: GitHub first, then `cloud:repos/samsung-tv-remote.git`. Plain `git push` on `main` sends the commit to both; the home-server push triggers deployment. `home` remains available for server-only pushes. Fetches from `origin` read GitHub.
+
+This multi-destination push configuration is local Git configuration, not part of a clone. To set it up on another trusted computer with the `cloud` SSH alias:
+
+```sh
+git remote set-url --add --push origin https://github.com/sakiatu/SamsungTV.git
+git remote set-url --add --push origin cloud:repos/samsung-tv-remote.git
+git config branch.main.pushRemote origin
+```
+
+Pushes to two servers are not atomic. Inspect both results; if one fails, rerun `git push` after restoring access. GitHub-only edits do not automatically deploy to the LAN server; pull them locally and push both destinations.
